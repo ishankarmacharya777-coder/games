@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🎮 Arcade: Pong + Reaction Speed</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Orbitron:wght@700;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d14;
+    --surface: #16161f;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0eeff;
+    --muted: #6b6b88;
+    --purple: #7F77DD;
+    --pink: #FF6B9D;
+    --yellow: #FFD93D;
+    --green: #6BCB77;
+    --blue: #4D96FF;
+    --red: #E24B4A;
+  }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(127,119,221,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127,119,221,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    background: linear-gradient(135deg, var(--purple), var(--pink), var(--yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1.5rem;
+    background: var(--surface);
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+
+  .tab-btn.active {
+    background: var(--purple);
+    color: #fff;
+    box-shadow: 0 0 20px rgba(127,119,221,0.35);
+  }
+
+  /* GAME PANELS */
+  .game-panel { display: none; }
+  .game-panel.active { display: block; }
+
+  /* === PONG === */
+  #pong-wrap {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  #pong-canvas {
+    display: block;
+    width: 100%;
+    background: #08080f;
+  }
+
+  #pong-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8,8,15,0.9);
+    backdrop-filter: blur(4px);
+  }
+
+  #pong-overlay h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.8rem;
+    font-weight: 900;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  #pong-overlay .sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  .btn-primary {
+    padding: 12px 32px;
+    border: none;
+    border-radius: 10px;
+    background: var(--purple);
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.15s;
+    box-shadow: 0 0 24px rgba(127,119,221,0.4);
+  }
+
+  .btn-primary:hover { background: #534AB7; transform: scale(1.03); }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .pong-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 0 2px;
+  }
+
+  .ctrl-hint {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .ctrl-hint kbd {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    color: var(--text);
+  }
+
+  .touch-btns { display: flex; gap: 8px; }
+
+  .touch-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: background 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .touch-btn:active { background: var(--purple); }
+
+  /* === REACTION === */
+  #react-box {
+    width: 100%;
+    height: 220px;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #react-box.wait {
+    background: rgba(226,75,74,0.15);
+    border-color: var(--red);
+    box-shadow: 0 0 40px rgba(226,75,74,0.25);
+  }
+
+  #react-box.go {
+    background: rgba(99,153,34,0.2);
+    border-color: var(--green);
+    box-shadow: 0 0 40px rgba(107,203,119,0.3);
+  }
+
+  #react-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    transition: transform 0.1s;
+  }
+
+  #react-box.go #react-icon { transform: scale(1.3); }
+
+  #react-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  #react-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .react-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .stat-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--purple);
+  }
+
+  .react-history {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 14px;
+    min-height: 28px;
+  }
+
+  .hist-pill {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+  }
+
+  .hist-pill.fast { border-color: var(--green); color: var(--green); }
+  .hist-pill.ok   { border-color: var(--yellow); color: var(--yellow); }
+  .hist-pill.slow { border-color: var(--pink); color: var(--pink); }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header>
+    <h1>ARCADE</h1>
+    <p>Two games. One file. Pure HTML + CSS + JS.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('pong')">🏓 Pong</button>
+    <button class="tab-btn" onclick="switchTab('reaction')">⚡ Reaction Speed</button>
+  </div>
+
+  <!-- PONG PANEL -->
+  <div id="pong-panel" class="game-panel active">
+    <div id="pong-wrap">
+      <canvas id="pong-canvas" height="380"></canvas>
+      <div id="pong-overlay">
+        <h2>PONG</h2>
+        <p class="sub">W / S to move your paddle<br>AI controls the right side<br>First to 7 wins!</p>
+        <button class="btn-primary" onclick="startPong()">▶ START GAME</button>
+      </div>
+    </div>
+    <div class="pong-controls">
+      <span class="ctrl-hint"><kbd>W</kbd> Up &nbsp; <kbd>S</kbd> Down</span>
+      <div class="touch-btns">
+        <div class="touch-btn"
+          onmousedown="keys.w=true" onmouseup="keys.w=false" onmouseleave="keys.w=false"
+          ontouchstart="keys.w=true;event.preventDefault()" ontouchend="keys.w=false">▲</div>
+        <div class="touch-btn"
+          onmousedown="keys.s=true" onmouseup="keys.s=false" onmouseleave="keys.s=false"
+          ontouchstart="keys.s=true;event.preventDefault()" ontouchend="keys.s=false">▼</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REACTION PANEL -->
+  <div id="reaction-panel" class="game-panel">
+    <div id="react-box" class="idle" onclick="reactClick()">
+      <div id="react-icon">👾</div>
+      <div id="react-title">Tap to Start</div>
+      <div id="react-sub">Test your reaction speed!</div>
+    </div>
+    <div class="react-stats">
+      <div class="stat-card"><div class="stat-label">Last</div><div class="stat-val" id="stat-last">--</div></div>
+      <div class="stat-card"><div class="stat-label">Best</div><div class="stat-val" id="stat-best">--</div></div>
+      <div class="stat-card"><div class="stat-label">Average</div><div class="stat-val" id="stat-avg">--</div></div>
+    </div>
+    <div class="react-history" id="react-history"></div>
+  </div>
+</div>
+
+<script>
+/* ===== TAB SWITCH ===== */
+function switchTab(t) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) =>
+    b.classList.toggle('active', (i === 0 && t === 'pong') || (i === 1 && t === 'reaction'))
+  );
+  document.getElementById('pong-panel').classList.toggle('active', t === 'pong');
+  document.getElementById('reaction-panel').classList.toggle('active', t === 'reaction');
+}
+
+/* ===== PONG ===== */
+const canvas = document.getElementById('pong-canvas');
+const ctx = canvas.getContext('2d');
+const BALL_COLORS = ['#FF6B9D','#FFD93D','#6BCB77','#4D96FF','#C77DFF','#FF9E3D'];
+let pongRunning = false, animId = null;
+
+const state = {
+  ball: { x: 0, y: 0, vx: 0, vy: 0, r: 8, colorIdx: 0 },
+  p1:   { y: 0, score: 0, h: 65, w: 11, color: '#4D96FF' },
+  p2:   { y: 0, score: 0, h: 65, w: 11, color: '#FF6B9D' },
+  trail: []
+};
+
+const keys = { w: false, s: false };
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp')    { keys.w = true;  e.preventDefault(); }
+  if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown')  { keys.s = true;  e.preventDefault(); }
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp')   keys.w = false;
+  if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = false;
+});
+
+function initBall() {
+  const W = canvas.width, H = canvas.height;
+  const dir = Math.random() > 0.5 ? 1 : -1;
+  state.ball = {
+    x: W / 2, y: H / 2,
+    vx: dir * (4.2 + Math.random() * 0.8),
+    vy: (Math.random() - 0.5) * 4,
+    r: 8, colorIdx: Math.floor(Math.random() * BALL_COLORS.length)
+  };
+  state.trail = [];
+}
+
+function startPong() {
+  state.p1.score = 0;
+  state.p2.score = 0;
+  resizePong();
+  initBall();
+  state.p1.y = canvas.height / 2 - state.p1.h / 2;
+  state.p2.y = canvas.height / 2 - state.p2.h / 2;
+  document.getElementById('pong-overlay').style.display = 'none';
+  pongRunning = true;
+  if (animId) cancelAnimationFrame(animId);
+  gameLoop();
+}
+
+function gameLoop() {
+  if (!pongRunning) return;
+  updatePong();
+  drawPong();
+  animId = requestAnimationFrame(gameLoop);
+}
+
+function updatePong() {
+  const W = canvas.width, H = canvas.height;
+  const b = state.ball, p1 = state.p1, p2 = state.p2;
+  const PADDLE_SPEED = 5.5;
+
+  if (keys.w) p1.y = Math.max(0, p1.y - PADDLE_SPEED);
+  if (keys.s) p1.y = Math.min(H - p1.h, p1.y + PADDLE_SPEED);
+
+  const aiTarget = b.y - p2.h / 2;
+  const aiSpeed = 0.075 + Math.min(0.05, (state.p1.score + state.p2.score) * 0.003);
+  p2.y += (aiTarget - p2.y) * aiSpeed;
+  p2.y = Math.max(0, Math.min(H - p2.h, p2.y));
+
+  state.trail.push({ x: b.x, y: b.y, c: BALL_COLORS[b.colorIdx] });
+  if (state.trail.length > 14) state.trail.shift();
+
+  b.x += b.vx;
+  b.y += b.vy;
+
+  if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+  if (b.y + b.r > H) { b.y = H - b.r; b.vy = -Math.abs(b.vy); }
+
+  const p1x = 16;
+  if (b.x - b.r < p1x + p1.w && b.x + b.r > p1x && b.y > p1.y && b.y < p1.y + p1.h && b.vx < 0) {
+    b.vx = Math.abs(b.vx) * 1.05;
+    b.vy += (b.y - (p1.y + p1.h / 2)) * 0.12;
+    b.x = p1x + p1.w + b.r;
+    b.colorIdx = (b.colorIdx + 1) % BALL_COLORS.length;
+  }
+
+  const p2x = W - 16 - p2.w;
+  if (b.x + b.r > p2x && b.x - b.r < p2x + p2.w && b.y > p2.y && b.y < p2.y + p2.h && b.vx > 0) {
+    b.vx = -Math.abs(b.vx) * 1.05;
+    b.vy += (b.y - (p2.y + p2.h / 2)) * 0.12;
+    b.x = p2x - b.r;
+    b.colorIdx = (b.colorIdx + 1) % BALL_COLORS.length;
+  }
+
+  if (Math.abs(b.vy) > 9)  b.vy = 9 * Math.sign(b.vy);
+  if (Math.abs(b.vx) > 12) b.vx = 12 * Math.sign(b.vx);
+
+  if (b.x < 0)  { p2.score++; checkWin() || resetBall(); }
+  if (b.x > W)  { p1.score++; checkWin() || resetBall(); }
+}
+
+function resetBall() {
+  const W = canvas.width, H = canvas.height;
+  state.ball.x = W / 2; state.ball.y = H / 2;
+  state.ball.vx = (Math.random() > 0.5 ? 1 : -1) * 4.2;
+  state.ball.vy = (Math.random() - 0.5) * 4;
+  state.trail = [];
+}
+
+function checkWin() {
+  if (state.p1.score >= 7 || state.p2.score >= 7) {
+    pongRunning = false;
+    const ov = document.getElementById('pong-overlay');
+    ov.style.display = 'flex';
+    ov.querySelector('h2').textContent = state.p1.score >= 7 ? 'YOU WIN!' : 'AI WINS';
+    ov.querySelector('.sub').textContent = state.p1.score + ' — ' + state.p2.score;
+    return true;
+  }
+  return false;
+}
+
+function drawPong() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = '#08080f';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.setLineDash([6, 10]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+  ctx.restore();
+
+  ctx.font = 'bold 30px Orbitron, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText(state.p1.score, W / 2 - 44, 40);
+  ctx.fillText(state.p2.score, W / 2 + 44, 40);
+
+  state.trail.forEach((t, i) => {
+    const alpha = (i / state.trail.length) * 0.55;
+    const r = state.ball.r * (i / state.trail.length) * 0.85;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = t.c;
+    ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  const bc = BALL_COLORS[state.ball.colorIdx];
+  ctx.shadowColor = bc; ctx.shadowBlur = 18;
+  ctx.fillStyle = bc;
+  ctx.beginPath(); ctx.arc(state.ball.x, state.ball.y, state.ball.r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  const drawPad = (x, y, color, w, h) => {
+    ctx.shadowColor = color; ctx.shadowBlur = 14;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill();
+    ctx.shadowBlur = 0;
+  };
+  drawPad(16, state.p1.y, state.p1.color, state.p1.w, state.p1.h);
+  drawPad(W - 16 - state.p2.w, state.p2.y, state.p2.color, state.p2.w, state.p2.h);
+}
+
+function resizePong() {
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientHeight || 380;
+}
+window.addEventListener('resize', resizePong);
+resizePong();
+
+/* ===== REACTION SPEED ===== */
+let rState = 'idle', rTimer = null, rStart = null;
+let rTimes = [], rBest = null;
+const ICONS = { idle: '👾', wait: '🔴', go: '⚡', result: '✅', early: '❌' };
+
+function reactClick() {
+  if (rState === 'idle') {
+    setReact('wait', 'GET READY...', "Don't click yet!");
+    rState = 'wait';
+    rTimer = setTimeout(() => {
+      setReact('go', 'CLICK NOW!', 'As fast as you can!');
+      rStart = Date.now();
+      rState = 'go';
+    }, 1500 + Math.random() * 3000);
+
+  } else if (rState === 'wait') {
+    clearTimeout(rTimer);
+    setReact('idle', 'TOO EARLY!', 'Wait for the signal — tap to retry');
+    rState = 'idle';
+
+  } else if (rState === 'go') {
+    const t = Date.now() - rStart;
+    rTimes.push(t);
+    if (rTimes.length > 8) rTimes.shift();
+    if (rBest === null || t < rBest) rBest = t;
+    const avg = Math.round(rTimes.reduce((a, b) => a + b, 0) / rTimes.length);
+
+    document.getElementById('stat-last').textContent = t + 'ms';
+    document.getElementById('stat-best').textContent = rBest + 'ms';
+    document.getElementById('stat-avg').textContent  = avg + 'ms';
+
+    const msg = t < 150 ? 'SUPERHUMAN!' : t < 220 ? 'LIGHTNING!' : t < 300 ? 'GREAT!' : t < 400 ? 'GOOD!' : 'KEEP GOING!';
+    setReact('idle', msg, t + 'ms — tap to try again');
+    rState = 'idle';
+    addPill(t);
+  }
+}
+
+function setReact(cls, title, sub) {
+  const box = document.getElementById('react-box');
+  box.className = cls;
+  document.getElementById('react-icon').textContent  = ICONS[cls] || ICONS.idle;
+  document.getElementById('react-title').textContent = title;
+  document.getElementById('react-sub').textContent   = sub;
+}
+
+function addPill(t) {
+  const hist = document.getElementById('react-history');
+  const pill = document.createElement('div');
+  pill.className = 'hist-pill ' + (t < 250 ? 'fast' : t < 400 ? 'ok' : 'slow');
+  pill.textContent = t + 'ms';
+  hist.prepend(pill);
+  while (hist.children.length > 8) hist.removeChild(hist.lastChild);
+}
+</script>
+</body>
+</html>
